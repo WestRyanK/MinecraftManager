@@ -16,11 +16,34 @@ internal class Program
     {
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         _serverProcess = StartMinecraftServer(_ServerDirectoryDefault);
-        await ProcessServerOutputAsync(_serverProcess, _ShutdownCountdownDefault);
-
-        if (_ShutdownComputerDefault)
+        if (_serverProcess != null)
         {
-            ShutdownComputer();
+            _ = Task.Run(() => ProcessServerInputAsync(_serverProcess));
+            await ProcessServerOutputAsync(_serverProcess, _ShutdownCountdownDefault);
+
+            if (_ShutdownComputerDefault)
+            {
+                ShutdownComputer();
+            }
+        }
+    }
+
+    private static void ProcessServerInputAsync(Process serverProcess)
+    {
+        try
+        {
+            while (!serverProcess.HasExited)
+            {
+                string? input = Console.ReadLine();
+                if (input != null)
+                {
+                    WriteToServer(input);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            WriteError("Error processing input", e);
         }
     }
 
@@ -94,6 +117,7 @@ internal class Program
         }
         catch (Exception e)
         {
+            WriteError("Error shutting down server", e);
             WriteMessage(e.ToString());
         }
         return true;
@@ -155,6 +179,9 @@ internal class Program
 
     private static void WriteStop() => WriteToServer("stop");
     private static void WriteMessage(string message) => WriteToServer($"/say {message}");
+    private static void WriteError(string error, Exception e) {
+        WriteMessage($"{error}: {e}");
+    }
 
     private static void WriteToServer(string command)
     {
