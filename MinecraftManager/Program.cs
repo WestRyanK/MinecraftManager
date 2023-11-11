@@ -47,7 +47,7 @@ internal class Program
             {
                 if (line.Command.Equals("shutdown", StringComparison.OrdinalIgnoreCase))
                 {
-                    TryStartShutdownCountdown(shutdownCountdown, ref shutdownCancel);
+                    TryStartServerShutdown(shutdownCountdown, serverProcess, ref shutdownCancel);
                 }
                 else if (line.Command.Equals("cancel", StringComparison.OrdinalIgnoreCase))
                 {
@@ -55,9 +55,10 @@ internal class Program
                 }
             }
         }
+        await serverProcess.WaitForExitAsync();
     }
 
-    private static bool TryStartShutdownCountdown(TimeSpan shutdownCountdown, ref CancellationTokenSource? shutdownCancel)
+    private static bool TryStartServerShutdown(TimeSpan shutdownCountdown, Process serverProcess, ref CancellationTokenSource? shutdownCancel)
     {
         try
         {
@@ -68,7 +69,7 @@ internal class Program
             }
             shutdownCancel = new CancellationTokenSource();
             CancellationToken token = shutdownCancel.Token;
-            Task.Run(() => CountdownShutdown(shutdownCountdown, token));
+            Task.Run(() => ShutdownServer(shutdownCountdown, serverProcess, token));
         }
         catch (Exception e)
         {
@@ -77,7 +78,7 @@ internal class Program
         return true;
     }
 
-    private static async Task CountdownShutdown(TimeSpan shutdownCountdown, CancellationToken cancel)
+    private static async Task ShutdownServer(TimeSpan shutdownCountdown, Process serverProcess, CancellationToken cancel)
     {
         WriteMessage($"Shutting down in {shutdownCountdown.TotalSeconds} seconds");
         WriteMessage($"Type 'cancel' to abort shutdown");
@@ -86,7 +87,10 @@ internal class Program
         {
             return;
         }
-        WriteMessage("Shut down started");
+        WriteMessage("Server stopping...");
+        WriteToServer("stop");
+        await serverProcess.WaitForExitAsync();
+        Console.WriteLine("Server stopped successfully");
     }
 
     private static async Task WriteCountdown(TimeSpan totalTime, CancellationToken cancel) {
@@ -123,13 +127,10 @@ internal class Program
 
     private static void WriteToServer(string command)
     {
+        Console.WriteLine($"Write: '{command}'");
         if (_serverInput != null)
         {
             _serverInput.WriteLine(command);
-        }
-        else
-        {
-            Console.WriteLine($"Error writing: '{command}'");
         }
     }
 }
