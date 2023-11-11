@@ -7,6 +7,8 @@ internal class Program
 {
     private static readonly string _ServerDirectoryDefault = Path.Combine("C:", "Program Files", "minecraft_servers", "lee_mindcrap_server");
     private static readonly TimeSpan _ShutdownCountdownDefault = TimeSpan.FromSeconds(30);
+    private const string _ShutdownCommand = "!shutdown";
+    private const string _CancelCommand = "!cancel";
 
     private static Process? _serverProcess;
     private static StreamWriter? _serverInput;
@@ -41,7 +43,7 @@ internal class Program
                     {
                         _isShutdownEnabled = true;
                         WriteMessage("Shutdown has been enabled");
-                        WriteMessage("Type 'shutdown' or 'cancel' to control the server");
+                        WriteMessage($"Type '{_ShutdownCommand}' or '{_CancelCommand}' to control the server");
                     }
                     else if (input.Equals("disable shutdown", StringComparison.OrdinalIgnoreCase))
                     {
@@ -103,11 +105,11 @@ internal class Program
             Console.WriteLine(input);
             if (Line.TryParse(input, out Line line))
             {
-                if (line.Command.Equals("shutdown", StringComparison.OrdinalIgnoreCase))
+                if (line.Command.Equals(_ShutdownCommand, StringComparison.OrdinalIgnoreCase))
                 {
                     TryStartServerShutdown(shutdownCountdown, serverProcess, _isShutdownEnabled, ref shutdownCancel);
                 }
-                else if (line.Command.Equals("cancel", StringComparison.OrdinalIgnoreCase))
+                else if (line.Command.Equals(_CancelCommand, StringComparison.OrdinalIgnoreCase))
                 {
                     TryAbortShutdown(_isShutdownEnabled, ref shutdownCancel);
                 }
@@ -145,7 +147,7 @@ internal class Program
     private static async Task ShutdownServer(TimeSpan shutdownCountdown, Process serverProcess, CancellationToken cancel)
     {
         WriteMessage($"Shutting down in {shutdownCountdown.TotalSeconds} seconds");
-        WriteMessage($"Type 'cancel' to abort shutdown");
+        WriteMessage($"Type '{_CancelCommand}' to abort shutdown");
         await WriteCountdown(shutdownCountdown, cancel);
         if (cancel.IsCancellationRequested)
         {
