@@ -6,7 +6,8 @@ namespace MinecraftManager;
 internal class Program
 {
     private static readonly string _ServerDirectoryDefault = Path.Combine("C:", "Program Files", "minecraft_servers", "lee_mindcrap_server");
-    private static readonly TimeSpan _ShutdownCountdownDefault = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan _ShutdownCountdownDefault = TimeSpan.FromSeconds(30);
+    private static readonly bool _ShutdownComputerDefault = true;
 
     private static StreamWriter? _serverInput;
 
@@ -14,16 +15,19 @@ internal class Program
     {
         Process serverProcess = StartMinecraftServer(_ServerDirectoryDefault);
         await ProcessServerOutputAsync(serverProcess, _ShutdownCountdownDefault);
+
+        if (_ShutdownComputerDefault)
+        {
+            ShutdownComputer();
+        }
     }
 
     private static Process StartMinecraftServer(string serverDirectory)
     {
         Process serverProcess = new()
         {
-            StartInfo = new ProcessStartInfo()
+            StartInfo = new ProcessStartInfo("java", "-jar server.jar --nogui")
             {
-                FileName = "java",
-                Arguments = "-jar server.jar --nogui",
                 WorkingDirectory = serverDirectory,
                 UseShellExecute = false,
                 RedirectStandardInput = true,
@@ -91,6 +95,18 @@ internal class Program
         WriteToServer("stop");
         await serverProcess.WaitForExitAsync();
         Console.WriteLine("Server stopped successfully");
+    }
+
+    private static void ShutdownComputer() {
+        Process shutdownProcess = new()
+        {
+            StartInfo = new ProcessStartInfo("shutdown", "/s /t 0")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            }
+        };
+        shutdownProcess.Start();
     }
 
     private static async Task WriteCountdown(TimeSpan totalTime, CancellationToken cancel) {
