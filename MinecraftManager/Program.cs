@@ -70,7 +70,7 @@ internal struct Line
         Match match = _Regex.Match(input);
         if (!match.Success ||
             !DateTime.TryParse(match.Groups[_TimeGroup].Value, out DateTime time) ||
-            match.Groups[_LevelGroup].Value is not string level ||
+            !Enum.TryParse(match.Groups[_LevelGroup].Value?.ToUpper(), true, out LogLevel level) ||
             match.Groups[_PlayerGroup].Value is not string player ||
             match.Groups[_CommandGroup].Value is not string command)
         {
@@ -87,4 +87,13 @@ internal struct Line
         };
         return true;
     }
+}
+
+internal enum LogLevel
+{
+    Trace,
+    Debug,
+    Info,
+    Error,
+    Fatal,
 }
