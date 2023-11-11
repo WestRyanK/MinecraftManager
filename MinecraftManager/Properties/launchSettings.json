@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "MinecraftManager": {
+      "commandName": "Project",
+      "commandLineArgs": "serverPath=\"C:/Program Files/test\" ShutdownDelay=10 IsShutdownEnabled=true"
+    }
+  }
+}

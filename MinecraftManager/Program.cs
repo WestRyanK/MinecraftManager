@@ -1,27 +1,69 @@
-﻿using System.Data;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Configuration;
+
 
 namespace MinecraftManager;
 internal class Program
 {
-    private static readonly string _ServerDirectoryDefault = Path.Combine("C:", "Program Files", "minecraft_servers", "lee_mindcrap_server");
-    private static readonly TimeSpan _ShutdownCountdownDefault = TimeSpan.FromSeconds(30);
+    private static readonly string _ServerPathDefault = Path.Combine("C:", "Program Files", "minecraft_servers", "lee_mindcrap_server", "server.jar");
+    private static readonly TimeSpan _ShutdownDelayDefault = TimeSpan.FromSeconds(30);
+    private const bool _IsShutdownEnabledDefault = false;
+
+    private const string _ServerPathArg = "ServerPath";
+    private const string _IsShutdownEnabledArg = "IsShutdownEnabled";
+    private const string _ShutdownDelayArg = "ShutdownDelay";
+
     private const string _ShutdownCommand = "!shutdown";
     private const string _CancelCommand = "!cancel";
+    private const string _EnableShutdownCommand = "enable shutdown";
+    private const string _DisableShutdownCommand = "disable shutdown";
 
+    private static string _serverPath;
     private static Process? _serverProcess;
-    private static StreamWriter? _serverInput;
-    private static bool _isShutdownEnabled = false;
+    private static bool _isShutdownEnabled;
+    private static TimeSpan _shutdownDelay;
 
     async static Task Main(string[] args)
     {
+        ConfigurationBuilder builder = new();
+        builder.AddCommandLine(args);
+        IConfigurationRoot? config = null;
+        try
+        {
+            config = builder.Build();
+        }
+        catch (FormatException e)
+        {
+            Console.WriteLine($"Error parsing commandline arguments: {e}");
+            Console.WriteLine($"Valid arguments are: {_ServerPathArg}=\"path_to_server.jar\" {_ShutdownDelayArg}=seconds_number {_IsShutdownEnabledArg}=true_or_false");
+            return;
+        }
+
+        _serverPath = config[_ServerPathArg] ?? _ServerPathDefault;
+        _isShutdownEnabled = bool.TryParse(config[_IsShutdownEnabledArg], out bool isEnabled) ? isEnabled : _IsShutdownEnabledDefault;
+        _shutdownDelay = double.TryParse(config[_ShutdownDelayArg], out double delaySeconds) ? TimeSpan.FromSeconds(delaySeconds) : _ShutdownDelayDefault;
+        Console.WriteLine($"{_ServerPathArg}: '{_serverPath}'");
+        Console.WriteLine($"{_IsShutdownEnabledArg}: '{_isShutdownEnabled}'");
+        Console.WriteLine($"{_ShutdownDelayArg}: {_shutdownDelay.TotalSeconds} seconds");
+        Console.WriteLine();
+        Console.WriteLine($"Type '{_EnableShutdownCommand}' or '{_DisableShutdownCommand}' to allow/disallow players shutting down server");
+        Console.WriteLine("Type 'stop' to shutdown the server");
+        Console.WriteLine("You can also issue any normal server commands from this window");
+        Console.WriteLine();
+
+        await RunMinecraftManager();
+    }
+
+    private static async Task RunMinecraftManager()
+    {
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
-        _serverProcess = StartMinecraftServer(_ServerDirectoryDefault);
+
+        _serverProcess = StartMinecraftServer();
         if (_serverProcess != null)
         {
             _ = Task.Run(() => ProcessServerInputAsync(_serverProcess));
-            bool playerShutdown = await ProcessServerOutputAsync(_serverProcess, _ShutdownCountdownDefault);
+            bool playerShutdown = await ProcessServerOutputAsync(_serverProcess);
 
             if (playerShutdown && _isShutdownEnabled)
             {
@@ -39,13 +81,13 @@ internal class Program
                 string? input = Console.ReadLine();
                 if (input != null)
                 {
-                    if (input.Equals("enable shutdown", StringComparison.OrdinalIgnoreCase))
+                    if (input.Equals(_EnableShutdownCommand, StringComparison.OrdinalIgnoreCase))
                     {
                         _isShutdownEnabled = true;
                         WriteMessage("Shutdown has been enabled");
                         WriteMessage($"Type '{_ShutdownCommand}' or '{_CancelCommand}' to control the server");
                     }
-                    else if (input.Equals("disable shutdown", StringComparison.OrdinalIgnoreCase))
+                    else if (input.Equals(_DisableShutdownCommand, StringComparison.OrdinalIgnoreCase))
                     {
                         _isShutdownEnabled = false;
                         WriteMessage("Shutdown has been disabled");
@@ -78,11 +120,14 @@ internal class Program
         }
     }
 
-    private static Process StartMinecraftServer(string serverDirectory)
+    private static Process StartMinecraftServer()
     {
+        string serverDirectory = Path.GetDirectoryName(_serverPath);
+        string serverFileName = Path.GetFileName(_serverPath);
+
         Process serverProcess = new()
         {
-            StartInfo = new ProcessStartInfo("java", "-jar server.jar --nogui")
+            StartInfo = new ProcessStartInfo("java", $"-jar {serverFileName} --nogui")
             {
                 WorkingDirectory = serverDirectory,
                 UseShellExecute = false,
@@ -91,11 +136,10 @@ internal class Program
             }
         };
         serverProcess.Start();
-        _serverInput = serverProcess.StandardInput;
         return serverProcess;
     }
 
-    private static async Task<bool> ProcessServerOutputAsync(Process serverProcess, TimeSpan shutdownCountdown)
+    private static async Task<bool> ProcessServerOutputAsync(Process serverProcess)
     {
         CancellationTokenSource? shutdownCancel = null;
 
@@ -107,7 +151,7 @@ internal class Program
             {
                 if (line.Command.Equals(_ShutdownCommand, StringComparison.OrdinalIgnoreCase))
                 {
-                    TryStartServerShutdown(shutdownCountdown, serverProcess, _isShutdownEnabled, ref shutdownCancel);
+                    TryStartServerShutdown(serverProcess, _isShutdownEnabled, ref shutdownCancel);
                 }
                 else if (line.Command.Equals(_CancelCommand, StringComparison.OrdinalIgnoreCase))
                 {
@@ -118,7 +162,7 @@ internal class Program
         return shutdownCancel != null;
     }
 
-    private static bool TryStartServerShutdown(TimeSpan shutdownCountdown, Process serverProcess, bool isShutdownEnabled, ref CancellationTokenSource? shutdownCancel)
+    private static bool TryStartServerShutdown(Process serverProcess, bool isShutdownEnabled, ref CancellationTokenSource? shutdownCancel)
     {
         try
         {
@@ -134,7 +178,7 @@ internal class Program
             }
             shutdownCancel = new CancellationTokenSource();
             CancellationToken token = shutdownCancel.Token;
-            Task.Run(() => ShutdownServer(shutdownCountdown, serverProcess, token));
+            Task.Run(() => ShutdownServer(serverProcess, token));
         }
         catch (Exception e)
         {
@@ -144,11 +188,11 @@ internal class Program
         return true;
     }
 
-    private static async Task ShutdownServer(TimeSpan shutdownCountdown, Process serverProcess, CancellationToken cancel)
+    private static async Task ShutdownServer(Process serverProcess, CancellationToken cancel)
     {
-        WriteMessage($"Shutting down in {shutdownCountdown.TotalSeconds} seconds");
+        WriteMessage($"Shutting down in {_shutdownDelay.TotalSeconds} seconds");
         WriteMessage($"Type '{_CancelCommand}' to abort shutdown");
-        await WriteCountdown(shutdownCountdown, cancel);
+        await WriteCountdown(_shutdownDelay, cancel);
         if (cancel.IsCancellationRequested)
         {
             return;
@@ -205,17 +249,11 @@ internal class Program
 
     private static void WriteStop() => WriteToServer("stop");
     private static void WriteMessage(string message) => WriteToServer($"/say {message}");
-    private static void WriteError(string error, Exception e) {
-        WriteMessage($"{error}: {e}");
-    }
-
+    private static void WriteError(string error, Exception e) => WriteMessage($"{error}: {e}");
     private static void WriteToServer(string command)
     {
         Console.WriteLine($"Write: '{command}'");
-        if (_serverInput != null)
-        {
-            _serverInput.WriteLine(command);
-        }
+        _serverProcess?.StandardInput?.WriteLine(command);
     }
 }
 
