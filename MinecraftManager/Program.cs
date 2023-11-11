@@ -9,16 +9,33 @@ internal class Program
     private static readonly TimeSpan _ShutdownCountdownDefault = TimeSpan.FromSeconds(30);
     private static readonly bool _ShutdownComputerDefault = true;
 
+    private static Process? _serverProcess;
     private static StreamWriter? _serverInput;
 
     async static Task Main(string[] args)
     {
-        Process serverProcess = StartMinecraftServer(_ServerDirectoryDefault);
-        await ProcessServerOutputAsync(serverProcess, _ShutdownCountdownDefault);
+        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+        _serverProcess = StartMinecraftServer(_ServerDirectoryDefault);
+        await ProcessServerOutputAsync(_serverProcess, _ShutdownCountdownDefault);
 
         if (_ShutdownComputerDefault)
         {
             ShutdownComputer();
+        }
+    }
+
+    private static void OnProcessExit(object? sender, EventArgs e)
+    {
+        Console.WriteLine("Process Exiting");
+        WriteStop();
+        if (_serverProcess != null)
+        {
+            _serverProcess.WaitForExit();
+            Console.WriteLine("Server shutdown successfully");
+        }
+        else
+        {
+            Console.WriteLine("Server process doesn't exist");
         }
     }
 
@@ -92,7 +109,7 @@ internal class Program
             return;
         }
         WriteMessage("Server stopping...");
-        WriteToServer("stop");
+        WriteStop();
         await serverProcess.WaitForExitAsync();
         Console.WriteLine("Server stopped successfully");
     }
@@ -136,10 +153,8 @@ internal class Program
         return true;
     }
 
-    private static void WriteMessage(string message)
-    {
-        WriteToServer($"/say {message}");
-    }
+    private static void WriteStop() => WriteToServer("stop");
+    private static void WriteMessage(string message) => WriteToServer($"/say {message}");
 
     private static void WriteToServer(string command)
     {
