@@ -7,10 +7,10 @@ internal class Program
 {
     private static readonly string _ServerDirectoryDefault = Path.Combine("C:", "Program Files", "minecraft_servers", "lee_mindcrap_server");
     private static readonly TimeSpan _ShutdownCountdownDefault = TimeSpan.FromSeconds(30);
-    private static readonly bool _ShutdownComputerDefault = true;
 
     private static Process? _serverProcess;
     private static StreamWriter? _serverInput;
+    private static bool _isShutdownEnabled = false;
 
     async static Task Main(string[] args)
     {
@@ -21,7 +21,7 @@ internal class Program
             _ = Task.Run(() => ProcessServerInputAsync(_serverProcess));
             bool playerShutdown = await ProcessServerOutputAsync(_serverProcess, _ShutdownCountdownDefault);
 
-            if (playerShutdown && _ShutdownComputerDefault)
+            if (playerShutdown && _isShutdownEnabled)
             {
                 ShutdownComputer();
             }
@@ -37,7 +37,21 @@ internal class Program
                 string? input = Console.ReadLine();
                 if (input != null)
                 {
-                    WriteToServer(input);
+                    if (input.Equals("enable shutdown", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _isShutdownEnabled = true;
+                        WriteMessage("Shutdown has been enabled");
+                        WriteMessage("Type 'shutdown' or 'cancel' to control the server");
+                    }
+                    else if (input.Equals("disable shutdown", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _isShutdownEnabled = false;
+                        WriteMessage("Shutdown has been disabled");
+                    }
+                    else
+                    {
+                        WriteToServer(input);
+                    }
                 }
             }
         }
@@ -91,21 +105,26 @@ internal class Program
             {
                 if (line.Command.Equals("shutdown", StringComparison.OrdinalIgnoreCase))
                 {
-                    TryStartServerShutdown(shutdownCountdown, serverProcess, ref shutdownCancel);
+                    TryStartServerShutdown(shutdownCountdown, serverProcess, _isShutdownEnabled, ref shutdownCancel);
                 }
                 else if (line.Command.Equals("cancel", StringComparison.OrdinalIgnoreCase))
                 {
-                    TryAbortShutdown(ref shutdownCancel);
+                    TryAbortShutdown(_isShutdownEnabled, ref shutdownCancel);
                 }
             }
         }
         return shutdownCancel != null;
     }
 
-    private static bool TryStartServerShutdown(TimeSpan shutdownCountdown, Process serverProcess, ref CancellationTokenSource? shutdownCancel)
+    private static bool TryStartServerShutdown(TimeSpan shutdownCountdown, Process serverProcess, bool isShutdownEnabled, ref CancellationTokenSource? shutdownCancel)
     {
         try
         {
+            if (!isShutdownEnabled)
+            {
+                WriteMessage("Doing nothing. Shutdown is disabled");
+                return false;
+            }
             if (shutdownCancel != null)
             {
                 WriteMessage("Already shutting down");
@@ -163,8 +182,13 @@ internal class Program
         }
     }
 
-    private static bool TryAbortShutdown(ref CancellationTokenSource? shutdownCancel)
+    private static bool TryAbortShutdown(bool isShutdownEnabled, ref CancellationTokenSource? shutdownCancel)
     {
+        if (!isShutdownEnabled)
+        {
+            WriteMessage("Doing nothing. Shutdown is disabled");
+            return false;
+        }
         if (shutdownCancel == null)
         {
             WriteMessage("Nothing to abort");
