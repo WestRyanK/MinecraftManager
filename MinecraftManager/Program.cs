@@ -19,9 +19,9 @@ internal class Program
         if (_serverProcess != null)
         {
             _ = Task.Run(() => ProcessServerInputAsync(_serverProcess));
-            await ProcessServerOutputAsync(_serverProcess, _ShutdownCountdownDefault);
+            bool playerShutdown = await ProcessServerOutputAsync(_serverProcess, _ShutdownCountdownDefault);
 
-            if (_ShutdownComputerDefault)
+            if (playerShutdown && _ShutdownComputerDefault)
             {
                 ShutdownComputer();
             }
@@ -79,7 +79,7 @@ internal class Program
         return serverProcess;
     }
 
-    private static async Task ProcessServerOutputAsync(Process serverProcess, TimeSpan shutdownCountdown)
+    private static async Task<bool> ProcessServerOutputAsync(Process serverProcess, TimeSpan shutdownCountdown)
     {
         CancellationTokenSource? shutdownCancel = null;
 
@@ -99,7 +99,7 @@ internal class Program
                 }
             }
         }
-        await serverProcess.WaitForExitAsync();
+        return shutdownCancel != null;
     }
 
     private static bool TryStartServerShutdown(TimeSpan shutdownCountdown, Process serverProcess, ref CancellationTokenSource? shutdownCancel)
