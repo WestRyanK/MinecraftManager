@@ -2,7 +2,7 @@
   "profiles": {
     "MinecraftManager": {
       "commandName": "Project",
-      "commandLineArgs": "serverPath=\"C:/Program Files/test\" ShutdownDelay=10 IsShutdownEnabled=true"
+      "commandLineArgs": "serverPath=\"C:/Program Files/minecraft_servers/lee_mindcrap_server/server.jar\" ShutdownDelay=10 IsShutdownEnabled=false"
     }
   }
 }
