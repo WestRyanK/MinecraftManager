@@ -17,6 +17,9 @@ $PlayerRegex = "<(?<Player>.+)>"
 $CommandRegex = "(?<Command>.+)"
 $Regex = "^$TimeRegex $LevelRegex $PlayerRegex $CommandRegex$"
 
+function Stop-MinecraftServer {
+}
+
 Get-Content -Path $LogPath -Wait -Last 1 | Foreach-Object {
     Write-Host $_
     if ($_ -match $Regex) {
@@ -26,7 +29,7 @@ Get-Content -Path $LogPath -Wait -Last 1 | Foreach-Object {
         $Command = $Matches.Command
         Write-Host "($Time) ($Level) ($Player) ($Command)"
         if ($Command -eq "Shutdown") {
-            Write-Host "***Stopping Minecraft***"
+            Stop-MinecraftServer
         }
     }
 }
